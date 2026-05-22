@@ -1,6 +1,12 @@
+import { auth } from "@/integrations/firebase/client";
+
 type Msg = { role: "user" | "assistant"; content: string };
 
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
+const FUNCTIONS_BASE =
+  import.meta.env.VITE_FUNCTIONS_BASE_URL ||
+  "https://us-central1-smartlearn-8067e.cloudfunctions.net";
+
+const CHAT_URL = `${FUNCTIONS_BASE}/chat`;
 
 export async function streamChat({
   messages,
@@ -11,11 +17,14 @@ export async function streamChat({
   onDelta: (deltaText: string) => void;
   onDone: () => void;
 }) {
+  const user = auth.currentUser;
+  const token = user ? await user.getIdToken() : "";
+
   const resp = await fetch(CHAT_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify({ messages }),
   });
@@ -47,10 +56,7 @@ export async function streamChat({
       if (!line.startsWith("data: ")) continue;
 
       const jsonStr = line.slice(6).trim();
-      if (jsonStr === "[DONE]") {
-        streamDone = true;
-        break;
-      }
+      if (jsonStr === "[DONE]") { streamDone = true; break; }
 
       try {
         const parsed = JSON.parse(jsonStr);

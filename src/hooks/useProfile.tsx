@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { getDocument } from "@/integrations/firebase/db";
 import { useAuth } from "@/hooks/useAuth";
 
 interface Profile {
@@ -19,15 +19,10 @@ export const useProfile = () => {
       setLoading(false);
       return;
     }
-    supabase
-      .from("profiles")
-      .select("grade, full_name, branch_id")
-      .eq("user_id", user.id)
-      .single()
-      .then(({ data }) => {
-        setProfile(data as Profile | null);
-        setLoading(false);
-      });
+    getDocument<Profile>("profiles", user.uid).then((data) => {
+      setProfile(data);
+      setLoading(false);
+    });
   }, [user]);
 
   return { profile, loading, grade: profile?.grade ?? null };

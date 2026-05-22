@@ -1,15 +1,44 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import type { User, Session } from "@supabase/supabase-js";
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut as firebaseSignOut,
+  onAuthStateChanged,
+  sendPasswordResetEmail,
+  updatePassword,
+  User,
+} from "firebase/auth";
+import { auth } from "@/integrations/firebase/client";
+import { getDocumentWhere, setDocument, getDocument } from "@/integrations/firebase/db";
 
-type AppRole = "student" | "admin" | "super_admin" | "instructor" | "global_super_admin" | "branch_super_admin" | "branch_admin";
+type AppRole =
+  | "student"
+  | "admin"
+  | "super_admin"
+  | "instructor"
+  | "global_super_admin"
+  | "branch_super_admin"
+  | "branch_admin";
+
+// Firebase Auth user extended with a fake "session" shape so existing
+// components that read session?.access_token still compile.
+export interface Session {
+  access_token: string;
+  user: User;
+}
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   role: AppRole | null;
   loading: boolean;
-  signUp: (email: string, password: string, fullName: string, grade?: number, branchId?: string) => Promise<{ error: any }>;
+  signUp: (
+    email: string,
+    password: string,
+    fullName: string,
+    grade?: number,
+    branchId?: string
+  ) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   isAdmin: boolean;
@@ -28,59 +57,92 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [role, setRole] = useState<AppRole | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchRole = async (userId: string) => {
-    const { data } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId)
-      .single();
-    setRole((data?.role as AppRole) ?? "student");
+  const fetchRole = async (uid: string) => {
+    const roleDoc = await getDocumentWhere("user_roles", "user_id", "==", uid);
+    setRole((roleDoc?.role as AppRole) ?? "student");
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) fetchRole(session.user.id);
-      setLoading(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchRole(session.user.id);
+    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+      setUser(firebaseUser);
+      if (firebaseUser) {
+        const token = await firebaseUser.getIdToken();
+        setSession({ access_token: token, user: firebaseUser });
+        await fetchRole(firebaseUser.uid);
       } else {
+        setSession(null);
         setRole(null);
       }
       setLoading(false);
     });
-
-    return () => subscription.unsubscribe();
+    return unsub;
   }, []);
 
-  const signUp = async (email: string, password: string, fullName: string, grade?: number, branchId?: string) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { full_name: fullName, grade, branch_id: branchId } },
-    });
-    return { error };
+  const signUp = async (
+    email: string,
+    password: string,
+    fullName: string,
+    grade?: number,
+    branchId?: string
+  ) => {
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      const uid = cred.user.uid;
+
+      // Create profile document in Firestore
+      await setDocument("profiles", uid, {
+        user_id: uid,
+        full_name: fullName,
+        grade: grade ?? null,
+        branch_id: branchId ?? null,
+        account_status: "pending",
+        payment_status: "pending",
+        is_deleted: false,
+        is_suspended: false,
+        welcome_email_sent: false,
+        welcome_email_sent_at: null,
+        avatar_url: null,
+        phone_number: null,
+        gender: null,
+        date_of_birth: null,
+        preferred_language: "en",
+        student_id: null,
+        payment_receipt_url: null,
+        payment_method: null,
+        payment_reference_number: null,
+        payment_admin_comment: null,
+      });
+
+      // Create role document
+      await setDocument("user_roles", uid, {
+        user_id: uid,
+        role: "student",
+      });
+
+      return { error: null };
+    } catch (err: any) {
+      return { error: err };
+    }
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error };
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      return { error: null };
+    } catch (err: any) {
+      return { error: err };
+    }
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    await firebaseSignOut(auth);
     setRole(null);
+    setSession(null);
   };
 
-  const isGlobalSuperAdmin = role === "global_super_admin" as AppRole;
-  const isBranchSuperAdmin = role === "branch_super_admin" as AppRole;
-  const isBranchAdmin = role === "branch_admin" as AppRole;
+  const isGlobalSuperAdmin = role === "global_super_admin";
+  const isBranchSuperAdmin = role === "branch_super_admin";
+  const isBranchAdmin = role === "branch_admin";
 
   return (
     <AuthContext.Provider
@@ -92,7 +154,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         signUp,
         signIn,
         signOut,
-        isAdmin: role === "admin" || role === "super_admin" || isGlobalSuperAdmin || isBranchSuperAdmin || isBranchAdmin,
+        isAdmin:
+          role === "admin" ||
+          role === "super_admin" ||
+          isGlobalSuperAdmin ||
+          isBranchSuperAdmin ||
+          isBranchAdmin,
         isSuperAdmin: role === "super_admin" || isGlobalSuperAdmin,
         isInstructor: role === "instructor",
         isGlobalSuperAdmin,
@@ -110,3 +177,6 @@ export const useAuth = () => {
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
 };
+
+// Re-export Firebase auth helpers for use in pages
+export { sendPasswordResetEmail, updatePassword, auth };

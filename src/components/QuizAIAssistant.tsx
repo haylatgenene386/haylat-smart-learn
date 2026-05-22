@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Bot, X, Send, Loader2, Sparkles } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import { auth } from "@/integrations/firebase/client";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -12,7 +13,7 @@ interface QuizAIAssistantProps {
   questionTopic?: string;
 }
 
-const ASSISTANT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/quiz-assistant`;
+const ASSISTANT_URL = `${import.meta.env.VITE_FUNCTIONS_BASE_URL || "https://us-central1-smartlearn-8067e.cloudfunctions.net"}/quiz-assistant`;
 
 const QuizAIAssistant = ({ questionText, questionTopic }: QuizAIAssistantProps) => {
   const [open, setOpen] = useState(false);
@@ -50,11 +51,14 @@ const QuizAIAssistant = ({ questionText, questionTopic }: QuizAIAssistantProps) 
     let assistantContent = "";
 
     try {
+      const user = auth.currentUser;
+      const token = user ? await user.getIdToken() : "";
+
       const resp = await fetch(ASSISTANT_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           messages: newMessages,

@@ -1,0 +1,184 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: check if user is authenticated
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Helper: get the caller's role from user_roles collection
+    function getRole() {
+      return get(/databases/$(database)/documents/user_roles/$(request.auth.uid)).data.role;
+    }
+
+    function isAdmin() {
+      return isAuth() && getRole() in ["admin", "super_admin", "global_super_admin", "branch_super_admin", "branch_admin"];
+    }
+
+    function isSuperAdmin() {
+      return isAuth() && getRole() in ["super_admin", "global_super_admin"];
+    }
+
+    function isInstructor() {
+      return isAuth() && getRole() == "instructor";
+    }
+
+    function isOwner(uid) {
+      return isAuth() && request.auth.uid == uid;
+    }
+
+    // ── Profiles ──────────────────────────────────────────────────────────
+    match /profiles/{userId} {
+      allow read: if isAuth();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) || isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    // ── User roles ────────────────────────────────────────────────────────
+    match /user_roles/{userId} {
+      allow read: if isAuth();
+      allow write: if isSuperAdmin();
+      // Allow user to create their own role on signup
+      allow create: if isOwner(userId);
+    }
+
+    // ── Branches ──────────────────────────────────────────────────────────
+    match /branches/{id} {
+      allow read: if isAuth();
+      allow write: if isSuperAdmin();
+    }
+
+    // ── Courses ───────────────────────────────────────────────────────────
+    match /courses/{id} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // ── Chapters ──────────────────────────────────────────────────────────
+    match /chapters/{id} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // ── Lessons ───────────────────────────────────────────────────────────
+    match /lessons/{id} {
+      allow read: if isAuth();
+      allow write: if isAdmin() || isInstructor();
+    }
+
+    // ── Materials ─────────────────────────────────────────────────────────
+    match /materials/{id} {
+      allow read: if isAuth();
+      allow create: if isAdmin() || isInstructor();
+      allow update, delete: if isAdmin() || (isInstructor() && resource.data.uploaded_by == request.auth.uid);
+    }
+
+    // ── Questions ─────────────────────────────────────────────────────────
+    match /questions/{id} {
+      allow read: if isAuth();
+      allow create: if isAdmin() || isInstructor();
+      allow update, delete: if isAdmin() || (isInstructor() && resource.data.created_by == request.auth.uid);
+    }
+
+    // ── Exams ─────────────────────────────────────────────────────────────
+    match /exams/{id} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
+    match /exam_questions/{id} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
+    match /exam_attempts/{id} {
+      allow read: if isAuth() && (resource.data.student_id == request.auth.uid || isAdmin());
+      allow create: if isAuth();
+      allow update: if isAuth() && (resource.data.student_id == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    match /exam_answers/{id} {
+      allow read: if isAuth();
+      allow write: if isAuth();
+    }
+
+    match /exam_retake_overrides/{id} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // ── Quiz results ──────────────────────────────────────────────────────
+    match /quiz_results/{id} {
+      allow read: if isAuth() && (resource.data.user_id == request.auth.uid || isAdmin());
+      allow create: if isAuth();
+      allow update, delete: if isAdmin();
+    }
+
+    // ── Messages & Conversations ──────────────────────────────────────────
+    match /conversations/{id} {
+      allow read: if isAuth() && (
+        resource.data.participant_1 == request.auth.uid ||
+        resource.data.participant_2 == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isAuth();
+      allow update: if isAuth() && (
+        resource.data.participant_1 == request.auth.uid ||
+        resource.data.participant_2 == request.auth.uid
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /messages/{id} {
+      allow read: if isAuth();
+      allow create: if isAuth();
+      allow update: if isAuth() && resource.data.sender_id == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+
+    // ── Platform settings ─────────────────────────────────────────────────
+    match /platform_settings/{id} {
+      allow read: if isAuth();
+      allow write: if isSuperAdmin();
+    }
+
+    // ── About us content ──────────────────────────────────────────────────
+    match /about_us_content/{id} {
+      allow read: if true; // Public
+      allow write: if isSuperAdmin();
+    }
+
+    // ── Email logs ────────────────────────────────────────────────────────
+    match /email_logs/{id} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ── Registration tokens ───────────────────────────────────────────────
+    match /registration_tokens/{id} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ── Instructor invitations ────────────────────────────────────────────
+    match /instructor_invitations/{id} {
+      allow read: if isAuth();
+      allow write: if isSuperAdmin();
+    }
+
+    match /instructor_courses/{id} {
+      allow read: if isAuth();
+      allow write: if isSuperAdmin();
+    }
+
+    // ── Chat messages (AI tutor history) ─────────────────────────────────
+    match /chat_messages/{id} {
+      allow read: if isAuth() && (resource.data.user_id == request.auth.uid || isAdmin());
+      allow create: if isAuth();
+      allow delete: if isAdmin();
+    }
+  }
+}
