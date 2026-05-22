@@ -1,0 +1,16 @@
+project_id = "ezznwplruymtcihskvor"
+
+[functions.chat]
+verify_jwt = false
+
+[functions.generate-questions]
+verify_jwt = false
+
+[functions.generate-from-material]
+verify_jwt = false
+
+[functions.send-registration-email]
+verify_jwt = false
+
+[functions.handle-registration-approval]
+verify_jwt = false

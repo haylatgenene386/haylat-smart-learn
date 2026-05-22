@@ -1,0 +1,1 @@
+ALTER TABLE public.exam_attempts ALTER COLUMN allow_review SET DEFAULT true;
