@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { GraduationCap, Lock, Eye, EyeOff } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { confirmPasswordReset, verifyPasswordResetCode } from "firebase/auth";
+import { auth } from "@/integrations/firebase/client";
 import { toast } from "sonner";
 
 const ResetPassword = () => {
@@ -11,33 +12,28 @@ const ResetPassword = () => {
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
+  const [oobCode, setOobCode] = useState<string | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Listen for the PASSWORD_RECOVERY event
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "PASSWORD_RECOVERY") {
-        setReady(true);
-      }
-      // Also treat SIGNED_IN with recovery hash as ready
-      if (event === "SIGNED_IN" && session) {
-        setReady(true);
-      }
-    });
+    // Firebase sends ?oobCode=xxx&mode=resetPassword in the reset link
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("oobCode");
+    const mode = params.get("mode");
 
-    // Check if already have a session (recovery link already processed)
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        setReady(true);
-      }
-    });
-
-    // Also check hash for type=recovery
-    if (window.location.hash.includes("type=recovery")) {
-      setReady(true);
+    if (code && mode === "resetPassword") {
+      verifyPasswordResetCode(auth, code)
+        .then(() => {
+          setOobCode(code);
+          setReady(true);
+        })
+        .catch(() => {
+          toast.error("This reset link is invalid or has expired. Please request a new one.");
+        });
+    } else {
+      // Fallback: if user is already signed in, allow password change
+      if (auth.currentUser) setReady(true);
     }
-
-    return () => subscription.unsubscribe();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -51,13 +47,19 @@ const ResetPassword = () => {
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.updateUser({ password });
-    setLoading(false);
-    if (error) {
-      toast.error(error.message);
-    } else {
+    try {
+      if (oobCode) {
+        await confirmPasswordReset(auth, oobCode, password);
+      } else if (auth.currentUser) {
+        const { updatePassword } = await import("firebase/auth");
+        await updatePassword(auth.currentUser, password);
+      }
       toast.success("Password updated successfully!");
-      navigate("/dashboard");
+      navigate("/login");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update password.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -85,8 +87,19 @@ const ResetPassword = () => {
                 <label className="mb-1.5 block text-sm font-medium">New Password</label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <input type={showPw ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="w-full rounded-lg border border-border bg-background py-2.5 pl-10 pr-10 text-sm outline-none focus:border-primary" required />
-                  <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                  <input
+                    type={showPw ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full rounded-lg border border-border bg-background py-2.5 pl-10 pr-10 text-sm outline-none focus:border-primary"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPw(!showPw)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  >
                     {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
@@ -95,7 +108,14 @@ const ResetPassword = () => {
                 <label className="mb-1.5 block text-sm font-medium">Confirm Password</label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <input type={showPw ? "text" : "password"} value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="••••••••" className="w-full rounded-lg border border-border bg-background py-2.5 pl-10 pr-4 text-sm outline-none focus:border-primary" required />
+                  <input
+                    type={showPw ? "text" : "password"}
+                    value={confirm}
+                    onChange={(e) => setConfirm(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full rounded-lg border border-border bg-background py-2.5 pl-10 pr-4 text-sm outline-none focus:border-primary"
+                    required
+                  />
                 </div>
               </div>
               <Button variant="hero" className="w-full" type="submit" disabled={loading}>

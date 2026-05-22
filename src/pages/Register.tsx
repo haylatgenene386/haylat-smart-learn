@@ -19,6 +19,9 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { auth } from "@/integrations/firebase/client";
+import { uploadFile } from "@/integrations/firebase/storage";
+import { updateDocument } from "@/integrations/firebase/db";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { PAYMENT_METHODS, PaymentMethodKey } from "@/lib/payment-methods";
@@ -163,38 +166,31 @@ const Register = () => {
 
     if (!isInviteMode) {
       try {
-        const { data: { user: newUser } } = await supabase.auth.getUser();
+        // Firebase: user is available directly from auth.currentUser after signUp
+        const newUser = auth.currentUser;
         if (newUser) {
           let receiptUrl: string | null = null;
 
           if (paymentFile) {
-            const ext = paymentFile.name.split(".").pop()?.toLowerCase() || "jpg";
-            const filePath = `${newUser.id}/receipt_${Date.now()}.${ext}`;
-            const { error: uploadError } = await supabase.storage
-              .from("payment-receipts")
-              .upload(filePath, paymentFile);
-
-            if (uploadError) {
-              console.error("Payment upload failed:", uploadError);
-            } else {
-              const { data: urlData } = supabase.storage.from("payment-receipts").getPublicUrl(filePath);
-              receiptUrl = urlData.publicUrl;
+            try {
+              const ext = paymentFile.name.split(".").pop()?.toLowerCase() || "jpg";
+              const filePath = `payment-receipts/${newUser.uid}/receipt_${Date.now()}.${ext}`;
+              receiptUrl = await uploadFile(filePath, paymentFile);
+            } catch (uploadErr) {
+              console.error("Payment upload failed:", uploadErr);
             }
           }
 
-          await supabase
-            .from("profiles")
-            .update({
-              payment_receipt_url: receiptUrl,
-              payment_method: paymentMethod || null,
-              payment_reference_number: paymentReference.trim() || null,
-              payment_status: "pending_review",
-            } as any)
-            .eq("user_id", newUser.id);
+          await updateDocument("profiles", newUser.uid, {
+            payment_receipt_url: receiptUrl,
+            payment_method: paymentMethod || null,
+            payment_reference_number: paymentReference.trim() || null,
+            payment_status: "pending_review",
+          });
 
           try {
             await supabase.functions.invoke("send-registration-email", {
-              body: { userId: newUser.id, type: "new_registration" },
+              body: { userId: newUser.uid, type: "new_registration" },
             });
           } catch (emailErr) {
             console.error("Failed to send admin notification:", emailErr);
