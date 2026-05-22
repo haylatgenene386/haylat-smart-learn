@@ -50,6 +50,14 @@ const Login = () => {
         currentUser.uid
       );
 
+      // No profile yet = first-time admin bootstrap, allow through
+      if (!profile) {
+        setLoading(false);
+        toast.success("Welcome!");
+        navigate(redirectPath || "/dashboard");
+        return;
+      }
+
       if (profile?.account_status === "pending") {
         await auth.signOut();
         setLoading(false);

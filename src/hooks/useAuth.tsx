@@ -89,14 +89,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const cred = await createUserWithEmailAndPassword(auth, email, password);
       const uid = cred.user.uid;
 
+      // Auto-approve and set super_admin for the platform owner email
+      const ADMIN_EMAIL = "haylatgenene386@gmail.com";
+      const isOwner = email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+
       // Create profile document in Firestore
       await setDocument("profiles", uid, {
         user_id: uid,
         full_name: fullName,
         grade: grade ?? null,
         branch_id: branchId ?? null,
-        account_status: "pending",
-        payment_status: "pending",
+        account_status: isOwner ? "approved" : "pending",
+        payment_status: isOwner ? "approved" : "pending",
         is_deleted: false,
         is_suspended: false,
         welcome_email_sent: false,
@@ -116,7 +120,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Create role document
       await setDocument("user_roles", uid, {
         user_id: uid,
-        role: "student",
+        role: isOwner ? "super_admin" : "student",
       });
 
       return { error: null };
