@@ -2,27 +2,48 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- TODO: Set the document title to the name of your application -->
-    <title>Haylat_EdTech</title>
-    <meta name="description" content="Haylat EdTech – Smart Learning Platform">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <title>Haylat EdTech</title>
+    <meta name="description" content="AI-powered smart learning platform for Ethiopian students (Grades 9–12)" />
     <meta name="author" content="HG7_Tech" />
 
-    <!-- TODO: Update og:title to match your application name -->
-    
-    
-    <meta property="og:type" content="website" />
-    <meta property="og:image" content="https://storage.googleapis.com/gpt-engineer-file-uploads/w1ihU2pg57cXtGfI19sCn5VB76G3/social-images/social-1774379162877-Gemini_Generated_Image_gt8xttgt8xttgt8x.webp">
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#047857" />
+    <meta name="mobile-web-app-capable" content="yes" />
 
+    <!-- iOS PWA -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Haylat" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152x152.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192x192.png" />
+
+    <!-- Splash screens for iOS -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
+    <!-- Windows / Edge -->
+    <meta name="msapplication-TileColor" content="#047857" />
+    <meta name="msapplication-TileImage" content="/icons/icon-144x144.png" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Haylat EdTech" />
+    <meta property="og:description" content="AI-powered smart learning platform for Ethiopian students" />
+    <meta property="og:image" content="/icons/icon-512x512.png" />
+
+    <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@HaylatEdTech" />
-    <meta name="twitter:image" content="https://storage.googleapis.com/gpt-engineer-file-uploads/w1ihU2pg57cXtGfI19sCn5VB76G3/social-images/social-1774379162877-Gemini_Generated_Image_gt8xttgt8xttgt8x.webp">
-    <meta property="og:title" content="Haylat_EdTech">
-  <meta name="twitter:title" content="Haylat_EdTech">
-  <meta property="og:description" content="Haylat EdTech – Smart Learning Platform">
-  <meta name="twitter:description" content="Haylat EdTech – Smart Learning Platform">
-  <link rel="icon" type="image/x-icon" href="/favicon.ico">
-</head>
+    <meta name="twitter:title" content="Haylat EdTech" />
+    <meta name="twitter:description" content="AI-powered smart learning platform for Ethiopian students" />
+    <meta name="twitter:image" content="/icons/icon-512x512.png" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="/favicon.png" />
+  </head>
 
   <body>
     <div id="root"></div>

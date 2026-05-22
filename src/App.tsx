@@ -7,6 +7,8 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { BranchProvider } from "@/hooks/useBranch";
 import { LanguageProvider } from "@/hooks/useLanguage";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
+import { OfflineBanner } from "@/components/OfflineBanner";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import Lessons from "./pages/Lessons";
@@ -61,6 +63,8 @@ const App = () => (
       <LanguageProvider>
         <Toaster />
         <Sonner />
+        <OfflineBanner />
+        <PWAInstallPrompt />
         <BrowserRouter>
           <AuthProvider>
            <BranchProvider>
