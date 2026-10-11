@@ -10,9 +10,9 @@ import {
 } from "firebase/auth";
 
 // Firebase user plus Supabase-style aliases (id, user_metadata) used across the app.
-export type User = FirebaseUser & { id: string; user_metadata: Record<string, any> };
+export type User = FirebaseUser & { id: string; user_metadata: Record<string, any>; created_at?: string };
 const toAppUser = (u: FirebaseUser): User =>
-  Object.assign(u, { id: u.uid, user_metadata: { full_name: u.displayName ?? "" } });
+  Object.assign(u, { id: u.uid, user_metadata: { full_name: u.displayName ?? "" }, created_at: u.metadata?.creationTime });
 import { auth } from "@/integrations/firebase/client";
 import { getDocumentWhere, setDocument, getDocument } from "@/integrations/firebase/db";
 
