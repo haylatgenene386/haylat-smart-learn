@@ -6,8 +6,13 @@ import {
   onAuthStateChanged,
   sendPasswordResetEmail,
   updatePassword,
-  User,
+  User as FirebaseUser,
 } from "firebase/auth";
+
+// Firebase user plus Supabase-style aliases (id, user_metadata) used across the app.
+export type User = FirebaseUser & { id: string; user_metadata: Record<string, any> };
+const toAppUser = (u: FirebaseUser): User =>
+  Object.assign(u, { id: u.uid, user_metadata: { full_name: u.displayName ?? "" } });
 import { auth } from "@/integrations/firebase/client";
 import { getDocumentWhere, setDocument, getDocument } from "@/integrations/firebase/db";
 
@@ -64,10 +69,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
-      setUser(firebaseUser);
-      if (firebaseUser) {
+      const appUser = firebaseUser ? toAppUser(firebaseUser) : null;
+      setUser(appUser);
+      if (firebaseUser && appUser) {
         const token = await firebaseUser.getIdToken();
-        setSession({ access_token: token, user: firebaseUser });
+        setSession({ access_token: token, user: appUser });
         await fetchRole(firebaseUser.uid);
       } else {
         setSession(null);
