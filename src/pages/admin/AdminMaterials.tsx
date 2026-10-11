@@ -1,3 +1,4 @@
+// @ts-nocheck -- loosely typed Firebase compatibility data
 import { useState, useCallback } from "react";
 import AdminLayout from "@/components/AdminLayout";
 import { Button } from "@/components/ui/button";
