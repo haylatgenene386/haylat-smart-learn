@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { GraduationCap, Mail, Lock, Eye, EyeOff, ArrowLeft } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { auth, sendPasswordResetEmail } from "@/hooks/useAuth";
-import { getDocumentWhere } from "@/integrations/firebase/db";
+import { getDocumentWhere, setDocument } from "@/integrations/firebase/db";
 import { toast } from "sonner";
 
 const Login = () => {
