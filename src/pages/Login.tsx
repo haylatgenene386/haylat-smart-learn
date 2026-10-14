@@ -50,6 +50,34 @@ const Login = () => {
         currentUser.uid
       );
 
+      // Platform owner: always approved; repair the record if it was stuck as pending
+      const OWNER_EMAIL = "haylatgenene386@gmail.com";
+      if (currentUser.email?.toLowerCase() === OWNER_EMAIL) {
+        try {
+          await setDocument("profiles", profile?.id ?? currentUser.uid, {
+            user_id: currentUser.uid,
+            account_status: "approved",
+            payment_status: "approved",
+            is_suspended: false,
+            is_deleted: false,
+          });
+          const roleDoc = await getDocumentWhere("user_roles", "user_id", "==", currentUser.uid);
+          if (!roleDoc) {
+            await setDocument("user_roles", currentUser.uid, { user_id: currentUser.uid, role: "super_admin" });
+          } else if (roleDoc.role !== "super_admin" && roleDoc.role !== "global_super_admin") {
+            await setDocument("user_roles", roleDoc.id, { role: "super_admin" }).catch((e) =>
+              console.error("Could not upgrade owner role:", e)
+            );
+          }
+        } catch (e) {
+          console.error("Owner account repair failed:", e);
+        }
+        setLoading(false);
+        toast.success("Welcome back!");
+        window.location.href = redirectPath || "/admin";
+        return;
+      }
+
       // No profile yet = first-time admin bootstrap, allow through
       if (!profile) {
         setLoading(false);
@@ -57,6 +85,7 @@ const Login = () => {
         navigate(redirectPath || "/dashboard");
         return;
       }
+
 
       if (profile?.account_status === "pending") {
         await auth.signOut();
