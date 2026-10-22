@@ -17,8 +17,9 @@ import { fetchApprovalProfiles, toDateLabel } from "@/lib/approvals";
 type PendingUser = {
   user_id: string;
   full_name: string | null;
+  email?: string | null;
   grade: number | null;
-  created_at: string;
+  created_at: any;
   account_status: string;
   branch_id: string | null;
   branch_name: string | null;
@@ -93,7 +94,7 @@ const AdminApprovals = () => {
   });
 
   const filtered = users.filter(
-    (u) => !search || u.full_name?.toLowerCase().includes(search.toLowerCase())
+    (u) => { const q = search.trim().toLowerCase(); return !q || [u.full_name, u.email, u.payment_reference_number].some((v) => v?.toLowerCase().includes(q)); }
   );
 
   const statusIcon = (status: string) => {
@@ -174,7 +175,7 @@ const AdminApprovals = () => {
         <div className="flex flex-col gap-3 sm:flex-row">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Search by name..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+            <Input placeholder="Search by name, email or reference..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-full sm:w-40"><SelectValue /></SelectTrigger>
@@ -191,6 +192,11 @@ const AdminApprovals = () => {
             <div className="flex items-center justify-center p-12">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
             </div>
+          ) : loadError ? (
+            <div className="p-12 text-center space-y-3">
+              <p className="text-sm text-destructive">{(loadError as Error).message}</p>
+              <Button size="sm" variant="outline" onClick={() => refetch()}>Try again</Button>
+            </div>
           ) : filtered.length === 0 ? (
             <div className="p-12 text-center text-muted-foreground">
               {statusFilter === "pending" ? "No pending registrations 🎉" : "No users found"}
@@ -205,10 +211,11 @@ const AdminApprovals = () => {
                     </div>
                     <div>
                       <p className="text-sm font-medium">{u.full_name || "Unnamed"}</p>
+                      {u.email && <p className="text-xs text-muted-foreground">{u.email}</p>}
                       <p className="text-xs text-muted-foreground">
                         {u.role} · {u.grade ? `Grade ${u.grade}` : "No grade"}
                         {u.branch_name ? ` · ${u.branch_name}` : ""}
-                        {" · "}Registered {new Date(u.created_at).toLocaleDateString()}
+                        {" · "}Registered {toDateLabel(u.created_at)}
                       </p>
                     </div>
                   </div>
@@ -260,10 +267,11 @@ const AdminApprovals = () => {
           {selectedUser && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="col-span-2"><span className="text-muted-foreground">Email:</span> {selectedUser.email || "Not recorded"}</div>
                 <div><span className="text-muted-foreground">Role:</span> {selectedUser.role}</div>
                 <div><span className="text-muted-foreground">Grade:</span> {selectedUser.grade || "N/A"}</div>
                 <div><span className="text-muted-foreground">Branch:</span> {selectedUser.branch_name || "N/A"}</div>
-                <div><span className="text-muted-foreground">Registered:</span> {new Date(selectedUser.created_at).toLocaleDateString()}</div>
+                <div><span className="text-muted-foreground">Registered:</span> {toDateLabel(selectedUser.created_at)}</div>
               </div>
 
               {/* Payment details */}
