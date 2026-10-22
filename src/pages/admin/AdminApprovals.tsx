@@ -36,31 +36,26 @@ const AdminApprovals = () => {
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
-  const { data: users = [], isLoading } = useQuery({
-    queryKey: ["approval-users", statusFilter],
+  const { currentBranch, isGlobalRole, userBranchId } = useBranch();
+  const scopeBranch = isGlobalRole ? currentBranch?.id ?? null : userBranchId;
+
+  const { data: users = [], isLoading, error: loadError, refetch } = useQuery({
+    queryKey: ["approval-users", statusFilter, scopeBranch],
+    refetchInterval: 30000,
     queryFn: async () => {
-      let query = supabase
-        .from("profiles")
-        .select("user_id, full_name, grade, created_at, account_status, branch_id, payment_receipt_url, payment_status, payment_admin_comment, payment_method, payment_reference_number")
-        .order("created_at", { ascending: false });
-
-      if (statusFilter !== "all") {
-        query = query.eq("account_status", statusFilter);
-      } else {
-        query = query.in("account_status", ["pending", "rejected"]);
-      }
-
-      const { data: profiles } = await query;
+      const statuses = statusFilter === "all" ? ["pending", "rejected"] : [statusFilter];
+      const profiles = await fetchApprovalProfiles(statuses, scopeBranch);
       const { data: roles } = await supabase.from("user_roles").select("user_id, role");
       const { data: branches } = await supabase.from("branches").select("id, name");
 
-      const roleMap = new Map(roles?.map((r) => [r.user_id, r.role]) ?? []);
-      const branchMap = new Map(branches?.map((b) => [b.id, b.name]) ?? []);
+      const roleMap = new Map((roles as any[])?.map((r) => [r.user_id, r.role]) ?? []);
+      const branchMap = new Map((branches as any[])?.map((b) => [b.id, b.name]) ?? []);
 
-      return (profiles ?? []).map((p: any) => ({
+      return profiles.map((p: any) => ({
         ...p,
+        user_id: p.user_id ?? p.id,
         branch_name: p.branch_id ? branchMap.get(p.branch_id) ?? null : null,
-        role: (roleMap.get(p.user_id) as string) ?? "student",
+        role: (roleMap.get(p.user_id ?? p.id) as string) ?? "student",
       })) as PendingUser[];
     },
   });
