@@ -11,12 +11,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Search, UserCheck, UserX, Clock, CheckCircle2, XCircle, FileText, Image, Eye, Hash, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { getPaymentMethod } from "@/lib/payment-methods";
+import { useBranch } from "@/hooks/useBranch";
+import { fetchApprovalProfiles, toDateLabel } from "@/lib/approvals";
 
 type PendingUser = {
   user_id: string;
   full_name: string | null;
+  email?: string | null;
   grade: number | null;
-  created_at: string;
+  created_at: any;
   account_status: string;
   branch_id: string | null;
   branch_name: string | null;
@@ -36,31 +39,26 @@ const AdminApprovals = () => {
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
-  const { data: users = [], isLoading } = useQuery({
-    queryKey: ["approval-users", statusFilter],
+  const { currentBranch, isGlobalRole, userBranchId } = useBranch();
+  const scopeBranch = isGlobalRole ? currentBranch?.id ?? null : userBranchId;
+
+  const { data: users = [], isLoading, error: loadError, refetch } = useQuery({
+    queryKey: ["approval-users", statusFilter, scopeBranch],
+    refetchInterval: 30000,
     queryFn: async () => {
-      let query = supabase
-        .from("profiles")
-        .select("user_id, full_name, grade, created_at, account_status, branch_id, payment_receipt_url, payment_status, payment_admin_comment, payment_method, payment_reference_number")
-        .order("created_at", { ascending: false });
-
-      if (statusFilter !== "all") {
-        query = query.eq("account_status", statusFilter);
-      } else {
-        query = query.in("account_status", ["pending", "rejected"]);
-      }
-
-      const { data: profiles } = await query;
+      const statuses = statusFilter === "all" ? ["pending", "rejected"] : [statusFilter];
+      const profiles = await fetchApprovalProfiles(statuses, scopeBranch);
       const { data: roles } = await supabase.from("user_roles").select("user_id, role");
       const { data: branches } = await supabase.from("branches").select("id, name");
 
-      const roleMap = new Map(roles?.map((r) => [r.user_id, r.role]) ?? []);
-      const branchMap = new Map(branches?.map((b) => [b.id, b.name]) ?? []);
+      const roleMap = new Map((roles as any[])?.map((r) => [r.user_id, r.role]) ?? []);
+      const branchMap = new Map((branches as any[])?.map((b) => [b.id, b.name]) ?? []);
 
-      return (profiles ?? []).map((p: any) => ({
+      return profiles.map((p: any) => ({
         ...p,
+        user_id: p.user_id ?? p.id,
         branch_name: p.branch_id ? branchMap.get(p.branch_id) ?? null : null,
-        role: (roleMap.get(p.user_id) as string) ?? "student",
+        role: (roleMap.get(p.user_id ?? p.id) as string) ?? "student",
       })) as PendingUser[];
     },
   });
@@ -96,7 +94,7 @@ const AdminApprovals = () => {
   });
 
   const filtered = users.filter(
-    (u) => !search || u.full_name?.toLowerCase().includes(search.toLowerCase())
+    (u) => { const q = search.trim().toLowerCase(); return !q || [u.full_name, u.email, u.payment_reference_number].some((v) => v?.toLowerCase().includes(q)); }
   );
 
   const statusIcon = (status: string) => {
@@ -177,7 +175,7 @@ const AdminApprovals = () => {
         <div className="flex flex-col gap-3 sm:flex-row">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Search by name..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+            <Input placeholder="Search by name, email or reference..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-full sm:w-40"><SelectValue /></SelectTrigger>
@@ -194,6 +192,11 @@ const AdminApprovals = () => {
             <div className="flex items-center justify-center p-12">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
             </div>
+          ) : loadError ? (
+            <div className="p-12 text-center space-y-3">
+              <p className="text-sm text-destructive">{(loadError as Error).message}</p>
+              <Button size="sm" variant="outline" onClick={() => refetch()}>Try again</Button>
+            </div>
           ) : filtered.length === 0 ? (
             <div className="p-12 text-center text-muted-foreground">
               {statusFilter === "pending" ? "No pending registrations 🎉" : "No users found"}
@@ -208,10 +211,11 @@ const AdminApprovals = () => {
                     </div>
                     <div>
                       <p className="text-sm font-medium">{u.full_name || "Unnamed"}</p>
+                      {u.email && <p className="text-xs text-muted-foreground">{u.email}</p>}
                       <p className="text-xs text-muted-foreground">
                         {u.role} · {u.grade ? `Grade ${u.grade}` : "No grade"}
                         {u.branch_name ? ` · ${u.branch_name}` : ""}
-                        {" · "}Registered {new Date(u.created_at).toLocaleDateString()}
+                        {" · "}Registered {toDateLabel(u.created_at)}
                       </p>
                     </div>
                   </div>
@@ -263,10 +267,11 @@ const AdminApprovals = () => {
           {selectedUser && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="col-span-2"><span className="text-muted-foreground">Email:</span> {selectedUser.email || "Not recorded"}</div>
                 <div><span className="text-muted-foreground">Role:</span> {selectedUser.role}</div>
                 <div><span className="text-muted-foreground">Grade:</span> {selectedUser.grade || "N/A"}</div>
                 <div><span className="text-muted-foreground">Branch:</span> {selectedUser.branch_name || "N/A"}</div>
-                <div><span className="text-muted-foreground">Registered:</span> {new Date(selectedUser.created_at).toLocaleDateString()}</div>
+                <div><span className="text-muted-foreground">Registered:</span> {toDateLabel(selectedUser.created_at)}</div>
               </div>
 
               {/* Payment details */}

@@ -103,6 +103,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       await setDocument("profiles", uid, {
         user_id: uid,
         full_name: fullName,
+        email: email.toLowerCase(),
+        created_at: new Date().toISOString(),
         grade: grade ?? null,
         branch_id: branchId ?? null,
         account_status: isOwner ? "approved" : "pending",

@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useBranch } from "@/hooks/useBranch";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { fetchApprovalProfiles } from "@/lib/approvals";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -22,15 +22,12 @@ const AdminLayout = ({ children }: { children: ReactNode }) => {
   const { currentBranch, branches, switchBranch, isGlobalRole } = useBranch();
   const { t } = useLanguage();
 
+  const { userBranchId } = useBranch();
+  const scopeBranch = isGlobalRole ? currentBranch?.id ?? null : userBranchId;
   const { data: pendingCount = 0 } = useQuery({
-    queryKey: ["pending-approvals-count"],
-    queryFn: async () => {
-      const { count } = await supabase
-        .from("profiles")
-        .select("*", { count: "exact", head: true })
-        .eq("account_status", "pending");
-      return count ?? 0;
-    },
+    queryKey: ["pending-approvals-count", scopeBranch],
+    queryFn: async () => (await fetchApprovalProfiles(["pending"], scopeBranch)).length,
+    enabled: !!isAdmin,
     refetchInterval: 30000,
   });
 
