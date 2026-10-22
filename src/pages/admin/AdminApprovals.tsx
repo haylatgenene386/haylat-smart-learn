@@ -11,6 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Search, UserCheck, UserX, Clock, CheckCircle2, XCircle, FileText, Image, Eye, Hash, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { getPaymentMethod } from "@/lib/payment-methods";
+import { useBranch } from "@/hooks/useBranch";
+import { fetchApprovalProfiles, toDateLabel } from "@/lib/approvals";
 
 type PendingUser = {
   user_id: string;
