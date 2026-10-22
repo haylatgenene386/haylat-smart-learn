@@ -20,7 +20,7 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { auth } from "@/integrations/firebase/client";
-import { uploadFile } from "@/integrations/firebase/storage";
+import { uploadFileWithProgress } from "@/integrations/firebase/storage";
 import { updateDocument } from "@/integrations/firebase/db";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -76,6 +76,8 @@ const Register = () => {
   const [paymentFile, setPaymentFile] = useState<File | null>(null);
 
   const [loading, setLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const { signUp } = useAuth();
   const navigate = useNavigate();
 
@@ -148,67 +150,99 @@ const Register = () => {
     if (step > 0) setStep(step - 1);
   };
 
-  const handleSubmit = async () => {
-    setLoading(true);
+  const describeUploadError = (err: any): string => {
+    const code: string = err?.code || "";
+    console.error("[register] receipt upload failed:", code || err?.message);
+    if (code === "storage/unauthorized") return "Upload was blocked by a permission rule. Please contact the school admin.";
+    if (code === "storage/object-not-found" || code === "storage/bucket-not-found" || code === "storage/unknown" || code === "storage/project-not-found")
+      return "File storage is not available right now. You can submit with a payment reference number instead, or try again later.";
+    if (code === "storage/retry-limit-exceeded" || code === "storage/canceled" || !navigator.onLine)
+      return "Network problem while uploading. Check your connection and tap Retry.";
+    return "Could not upload your receipt. Please tap Retry, or use a reference number instead.";
+  };
 
-    const { error } = await signUp(
-      email,
-      password,
-      fullName,
-      !isInviteMode && grade ? parseInt(grade) : undefined,
-      branchId || undefined
-    );
-    if (error) {
-      setLoading(false);
-      toast.error(error.message);
-      return;
+  const handleSubmit = async () => {
+    if (loading) return; // prevent double submit
+    setLoading(true);
+    setUploadError(null);
+
+    // Reuse the account if a previous attempt already created it (retry path)
+    let uid = auth.currentUser?.uid ?? null;
+    if (!uid) {
+      const { error } = await signUp(
+        email,
+        password,
+        fullName,
+        !isInviteMode && grade ? parseInt(grade) : undefined,
+        branchId || undefined
+      );
+      if (error) {
+        setLoading(false);
+        console.error("[register] sign-up failed:", error?.code);
+        toast.error(error.code === "auth/email-already-in-use" ? "This email is already registered. Please log in instead." : error.message);
+        return;
+      }
+      uid = auth.currentUser?.uid ?? null;
     }
 
-    if (!isInviteMode) {
-      try {
-        // Firebase: user is available directly from auth.currentUser after signUp
-        const newUser = auth.currentUser;
-        if (newUser) {
-          let receiptUrl: string | null = null;
-
-          if (paymentFile) {
-            try {
-              const ext = paymentFile.name.split(".").pop()?.toLowerCase() || "jpg";
-              const filePath = `payment-receipts/${newUser.uid}/receipt_${Date.now()}.${ext}`;
-              receiptUrl = await uploadFile(filePath, paymentFile);
-            } catch (uploadErr) {
-              console.error("Payment upload failed:", uploadErr);
-            }
-          }
-
-          await updateDocument("profiles", newUser.uid, {
-            payment_receipt_url: receiptUrl,
-            payment_method: paymentMethod || null,
-            payment_reference_number: paymentReference.trim() || null,
-            payment_status: "pending_review",
-          });
-
-          try {
-            await supabase.functions.invoke("send-registration-email", {
-              body: { userId: newUser.uid, type: "new_registration" },
-            });
-          } catch (emailErr) {
-            console.error("Failed to send admin notification:", emailErr);
-          }
-        }
-      } catch (uploadErr) {
-        console.error("Payment upload error:", uploadErr);
-      }
-
-      await supabase.auth.signOut();
-      setLoading(false);
-      toast.success("Account created! Your payment is now pending verification.");
-      navigate("/pending-verification");
-    } else {
+    if (isInviteMode) {
       setLoading(false);
       toast.success("Account created! Redirecting to accept your invitation...");
       navigate(`/accept-invite?token=${inviteToken}`);
+      return;
     }
+    if (!uid) {
+      setLoading(false);
+      toast.error("Your session was lost. Please try again.");
+      return;
+    }
+
+    // 1) Upload evidence first and wait for it to finish
+    let receiptUrl: string | null = null;
+    let receiptPath: string | null = null;
+    if (paymentFile) {
+      try {
+        const ext = paymentFile.name.split(".").pop()?.toLowerCase() || "jpg";
+        receiptPath = `payment-receipts/${uid}/receipt_${Date.now()}.${ext}`;
+        setUploadProgress(0);
+        receiptUrl = await uploadFileWithProgress(receiptPath, paymentFile, setUploadProgress, { contentType: paymentFile.type });
+      } catch (err) {
+        setUploadProgress(null);
+        setUploadError(describeUploadError(err));
+        setLoading(false);
+        return; // stay on page, details kept, Retry won't create a second account
+      }
+    }
+
+    // 2) Save reference + payment info
+    try {
+      await updateDocument("profiles", uid, {
+        email: email.toLowerCase(),
+        payment_receipt_url: receiptUrl,
+        payment_receipt_path: receiptPath,
+        payment_method: paymentMethod || null,
+        payment_reference_number: paymentReference.trim() || null,
+        payment_status: "pending_review",
+        payment_submitted_at: new Date().toISOString(),
+      });
+    } catch (err: any) {
+      console.error("[register] saving payment info failed:", err?.code);
+      setUploadError("Your receipt uploaded but saving your details failed. Please tap Retry.");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      await supabase.functions.invoke("send-registration-email", { body: { userId: uid, type: "new_registration" } });
+    } catch (emailErr) {
+      console.error("[register] admin notification failed");
+    }
+
+    await supabase.auth.signOut();
+    setLoading(false);
+    setUploadProgress(null);
+    toast.success("Submitted! Your payment is awaiting verification.");
+    navigate("/pending-verification");
   };
 
   const selectedMethod = PAYMENT_METHODS.find((m) => m.key === paymentMethod);
@@ -461,6 +495,20 @@ const Register = () => {
             </div>
           )}
 
+          {uploadProgress !== null && loading && (
+            <div className="mt-4">
+              <div className="mb-1 text-xs text-muted-foreground">Uploading receipt… {Math.round(uploadProgress)}%</div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                <div className="h-full bg-primary transition-all" style={{ width: `${uploadProgress}%` }} />
+              </div>
+            </div>
+          )}
+          {uploadError && (
+            <div className="mt-4 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+              {uploadError}
+            </div>
+          )}
+
           {/* Buttons */}
           <div className="mt-6 flex gap-2">
             {!isInviteMode && step > 0 && (
@@ -475,7 +523,7 @@ const Register = () => {
                 ? "Create Instructor Account"
                 : step < STEPS.length - 2
                 ? <>Next <ArrowRight className="h-4 w-4" /></>
-                : "Submit Registration"}
+                : uploadError ? "Retry Submission" : "Submit Registration"}
             </Button>
           </div>
 
