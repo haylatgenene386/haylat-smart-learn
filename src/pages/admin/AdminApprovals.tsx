@@ -116,12 +116,14 @@ const AdminApprovals = () => {
     return <Badge variant="destructive" className="gap-1 text-xs"><XCircle className="h-3 w-3" />Payment Rejected</Badge>;
   };
 
-  const isImageUrl = (url: string) => /\.(jpg|jpeg|png|gif|webp)/i.test(url);
+  const isImageUrl = (url: string) => /\.(jpg|jpeg|png|gif|webp)/i.test(decodeURIComponent(url.split("?")[0]));
 
   // Generate signed URL for private payment-receipts bucket
   const getReceiptUrl = async (receiptUrl: string) => {
     // Extract path from full URL — the path after /object/public/payment-receipts/ or /object/sign/payment-receipts/
-    const match = receiptUrl.match(/payment-receipts\/(.+)$/);
+    // Handle both plain paths and Firebase download URLs (path is URL-encoded, with ?alt=media&token=...)
+    const decoded = decodeURIComponent(receiptUrl.split("?")[0]);
+    const match = decoded.match(/payment-receipts\/(.+)$/);
     if (!match) {
       window.open(receiptUrl, "_blank");
       return;
@@ -131,7 +133,8 @@ const AdminApprovals = () => {
       .from("payment-receipts")
       .createSignedUrl(filePath, 300); // 5 min
     if (error || !data?.signedUrl) {
-      toast.error("Failed to load receipt. The file may not exist.");
+      console.error("[approvals] receipt fetch failed:", (error as any)?.code);
+      toast.error("Could not open this receipt. It may not have finished uploading, or storage is unavailable.");
       return;
     }
     return data.signedUrl;
@@ -139,7 +142,7 @@ const AdminApprovals = () => {
 
   const handleViewReceipt = async (u: PendingUser) => {
     if (!u.payment_receipt_url) return;
-    const signedUrl = await getReceiptUrl(u.payment_receipt_url);
+    const signedUrl = await getReceiptUrl((u as any).payment_receipt_path || u.payment_receipt_url);
     if (!signedUrl) return;
     if (isImageUrl(u.payment_receipt_url)) {
       setReceiptPreview(signedUrl);
@@ -155,7 +158,7 @@ const AdminApprovals = () => {
     setSelectedUser(u);
     setAdminComment(u.payment_admin_comment || "");
     if (u.payment_receipt_url) {
-      const url = await getReceiptUrl(u.payment_receipt_url);
+      const url = await getReceiptUrl((u as any).payment_receipt_path || u.payment_receipt_url);
       setReviewReceiptSignedUrl(url || null);
     } else {
       setReviewReceiptSignedUrl(null);

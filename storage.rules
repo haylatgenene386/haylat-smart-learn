@@ -3,9 +3,17 @@ service firebase.storage {
   match /b/{bucket}/o {
 
     // Payment receipts — only uploader and admins
-    match /payment-receipts/{userId}/{allPaths=**} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
+    function isAdmin() {
+      return request.auth != null &&
+        firestore.get(/databases/(default)/documents/user_roles/$(request.auth.uid)).data.role in
+          ['admin','super_admin','global_super_admin','branch_super_admin','branch_admin'];
+    }
+    match /payment-receipts/{userId}/{fileName} {
+      allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      allow create: if request.auth != null && request.auth.uid == userId
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png)|application/pdf');
+      allow update, delete: if false;
     }
 
     // Platform assets (avatars, materials) — authenticated users read, admins/instructors write
