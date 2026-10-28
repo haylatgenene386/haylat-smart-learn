@@ -14,7 +14,8 @@ import { getPaymentMethod } from "@/lib/payment-methods";
 import { useBranch } from "@/hooks/useBranch";
 import { useAuth } from "@/hooks/useAuth";
 import { fetchApprovalProfiles, toDateLabel, findDuplicateReference } from "@/lib/approvals";
-import { getCollection, updateDocument, addDocument, getDownloadURL, ref } from "@/integrations/firebase/db";
+import { getCollection, updateDocument, addDocument } from "@/integrations/firebase/db";
+import { getDownloadURL, ref } from "@/integrations/firebase/storage";
 import { storage } from "@/integrations/firebase/client";
 
 type PendingUser = {
@@ -178,7 +179,7 @@ const AdminApprovals = () => {
     if (u.payment_reference_number) {
       try {
         const dupes = await findDuplicateReference(u.payment_reference_number, u.user_id);
-        setDuplicates(dupes as PendingUser[]);
+        setDuplicates(dupes as unknown as PendingUser[]);
       } catch {
         // duplicate check is advisory; never block review on it
       }

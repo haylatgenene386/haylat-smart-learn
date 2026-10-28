@@ -180,5 +180,13 @@ service cloud.firestore {
       allow create: if isAuth();
       allow delete: if isAdmin();
     }
+
+    // ── Payment verification audit log ────────────────────────────────────
+    // Admins record each approve/reject decision; log entries are immutable.
+    match /payment_verifications/{id} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update, delete: if false;
+    }
   }
 }
