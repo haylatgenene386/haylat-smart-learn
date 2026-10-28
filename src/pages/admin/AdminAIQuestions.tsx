@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useNavigate } from "react-router-dom";
+import { getSupabaseFunctionHeaders, getSupabaseFunctionUrl } from "@/lib/supabase-functions";
 
 interface GeneratedQ {
   question_type: string;
@@ -107,24 +108,19 @@ const AdminAIQuestions = () => {
 
     setGenerating(true);
     try {
-      const resp = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-from-material`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify({
-            material_text: combinedText,
-            num_mcq: numMcq,
-            num_tf: numTf,
-            num_short: numShort,
-            num_essay: numEssay,
-            difficulty_mix: difficultyMix,
-          }),
-        }
-      );
+      const token = user ? await user.getIdToken() : undefined;
+      const resp = await fetch(getSupabaseFunctionUrl("generate-from-material"), {
+        method: "POST",
+        headers: getSupabaseFunctionHeaders(token),
+        body: JSON.stringify({
+          material_text: combinedText,
+          num_mcq: numMcq,
+          num_tf: numTf,
+          num_short: numShort,
+          num_essay: numEssay,
+          difficulty_mix: difficultyMix,
+        }),
+      });
 
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({ error: "Unknown error" }));

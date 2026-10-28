@@ -1,12 +1,7 @@
 import { auth } from "@/integrations/firebase/client";
+import { getSupabaseFunctionHeaders, getSupabaseFunctionUrl } from "@/lib/supabase-functions";
 
 type Msg = { role: "user" | "assistant"; content: string };
-
-const FUNCTIONS_BASE =
-  import.meta.env.VITE_FUNCTIONS_BASE_URL ||
-  "https://us-central1-smartlearn-8067e.cloudfunctions.net";
-
-const CHAT_URL = `${FUNCTIONS_BASE}/chat`;
 
 export async function streamChat({
   messages,
@@ -20,12 +15,9 @@ export async function streamChat({
   const user = auth.currentUser;
   const token = user ? await user.getIdToken() : "";
 
-  const resp = await fetch(CHAT_URL, {
+  const resp = await fetch(getSupabaseFunctionUrl("chat"), {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+    headers: getSupabaseFunctionHeaders(token),
     body: JSON.stringify({ messages }),
   });
 

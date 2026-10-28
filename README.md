@@ -6,8 +6,9 @@ An AI-powered educational platform for Ethiopian students (Grades 9–12), built
 
 - **Vite** + **React** + **TypeScript**
 - **Tailwind CSS** + **shadcn/ui**
-- **Supabase** (auth, database, edge functions)
-- **AI tutoring** via configurable AI gateway
+- **Firebase** (authentication, Firestore, and file storage)
+- **Supabase Edge Functions** for AI tutoring and question generation
+- **AI gateway** configured on the server
 
 ## Getting Started
 
@@ -21,8 +22,7 @@ cd haylat-smart-learn
 # 3. Install dependencies
 npm install
 
-# 4. Copy the example env and fill in your values
-cp .env.example .env
+# 4. Create .env and configure Firebase, Supabase, and function settings
 
 # 5. Start the development server
 npm run dev
@@ -32,18 +32,35 @@ npm run dev
 
 | Variable | Description |
 |---|---|
-| `VITE_SUPABASE_URL` | Your Supabase project URL |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase anon/public key |
+| `VITE_FIREBASE_API_KEY` | Firebase web API key |
+| `VITE_FIREBASE_AUTH_DOMAIN` | Firebase authentication domain |
+| `VITE_FIREBASE_PROJECT_ID` | Firebase project ID |
+| `VITE_FIREBASE_STORAGE_BUCKET` | Firebase Storage bucket |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | Firebase messaging sender ID |
+| `VITE_FIREBASE_APP_ID` | Firebase app ID |
+| `VITE_FIREBASE_MEASUREMENT_ID` | Firebase Analytics measurement ID |
+| `VITE_SUPABASE_URL` | Supabase project URL used for Edge Functions |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Public Supabase key sent with Edge Function requests |
+| `VITE_FUNCTIONS_BASE_URL` | Optional base URL for the legacy Firebase Cloud Functions compatibility calls |
 
-Supabase edge functions use the following secrets (set via `supabase secrets set`):
+The AI frontend calls the `chat`, `quiz-assistant`, `generate-questions`, and
+`generate-from-material` Supabase Edge Functions. Configure their server-side
+secrets with `supabase secrets set`:
 
 | Secret | Description |
 |---|---|
 | `AI_API_KEY` | API key for the AI gateway |
-| `GMAIL_USER` | Gmail address for sending emails |
-| `GMAIL_APP_PASSWORD` | Gmail app password |
-| `ADMIN_EMAIL` | Admin email for notifications |
-| `RESEND_API_KEY` | Resend API key for instructor invites |
+| `AI_GATEWAY_URL` | Optional AI gateway base URL; defaults to OpenAI-compatible API |
+| `GMAIL_USER` | Optional Gmail account used by the registration email function |
+| `GMAIL_APP_PASSWORD` | Gmail app password for registration email delivery |
+| `ADMIN_EMAIL` | Admin recipient for registration notifications |
+| `RESEND_API_KEY` | Optional Resend API key for instructor invitation email |
+
+This project is in a partial backend transition: Firebase remains responsible
+for authentication and application data, while the AI endpoints use Supabase.
+The Supabase email/invitation functions and legacy Cloud Functions compatibility
+calls are separate from that AI path; changing those would require aligning their
+authentication and data stores as a separate migration.
 
 ## Scripts
 

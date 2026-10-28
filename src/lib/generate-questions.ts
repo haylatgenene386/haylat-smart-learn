@@ -1,4 +1,5 @@
 import { auth } from "@/integrations/firebase/client";
+import { getSupabaseFunctionHeaders, getSupabaseFunctionUrl } from "@/lib/supabase-functions";
 
 export type AIQuestion = {
   question: string;
@@ -7,12 +8,6 @@ export type AIQuestion = {
   explanation: string;
   alternative_method?: string;
 };
-
-const FUNCTIONS_BASE =
-  import.meta.env.VITE_FUNCTIONS_BASE_URL ||
-  "https://us-central1-smartlearn-8067e.cloudfunctions.net";
-
-const URL = `${FUNCTIONS_BASE}/generate-questions`;
 
 export async function generateQuestions({
   topic,
@@ -28,12 +23,9 @@ export async function generateQuestions({
   const user = auth.currentUser;
   const token = user ? await user.getIdToken() : "";
 
-  const resp = await fetch(URL, {
+  const resp = await fetch(getSupabaseFunctionUrl("generate-questions"), {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+    headers: getSupabaseFunctionHeaders(token),
     body: JSON.stringify({ topic, grade, count, difficulty }),
   });
 
